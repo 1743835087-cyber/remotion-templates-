@@ -1,0 +1,1113 @@
+import React, { useEffect, useState } from "react";
+import {
+  AbsoluteFill,
+  cancelRender,
+  continueRender,
+  delayRender,
+  Easing,
+  interpolate,
+  spring,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion";
+import { ensureFontsLoaded } from "../../src/styles/loadFonts";
+
+export const PHONE_SPEC_DURATION = 240;
+
+export const phoneSpec = {
+  tierLabel: "价位段",
+  tierValue: "¥ 1500以下入门机",
+  name: "一加 Turbo 6X",
+  price: 1100,
+  subtitle: "目前最低是1100块钱左右",
+  footnote: "*手机价格为叠加各种补贴后的最低价格",
+};
+
+// Frame-driven reveal helper with crisp slide + blur fade-in
+const revealStyle = (
+  frame: number,
+  startFrame: number,
+  duration = 22,
+  distanceY = 18
+): React.CSSProperties => {
+  const progress = interpolate(frame, [startFrame, startFrame + duration], [0, 1], {
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  return {
+    opacity: progress,
+    transform: `translateY(${(1 - progress) * distanceY}px)`,
+    filter: `blur(${(1 - progress) * 5}px)`,
+  };
+};
+
+// Top-left geometric shield/wing watermark logo
+const TopLeftLogo: React.FC = () => (
+  <svg width="36" height="38" viewBox="0 0 36 38" fill="none">
+    <path d="M4 4L14 9V25L4 17V4Z" fill="rgba(255,255,255,0.32)" />
+    <path d="M32 4L22 9V25L32 17V4Z" fill="rgba(255,255,255,0.22)" />
+    <path d="M15 12L18 14L21 12V31L18 35L15 31V12Z" fill="rgba(255,255,255,0.38)" />
+    <path d="M7 20L15 27V32L7 24V20Z" fill="rgba(255,255,255,0.2)" />
+    <path d="M29 20L21 27V32L29 24V20Z" fill="rgba(255,255,255,0.28)" />
+  </svg>
+);
+
+// Small header icons matching the linear tech style in the screenshot
+const HeaderIcon: React.FC<{
+  type: "cpu" | "screen" | "battery" | "camera" | "body" | "price";
+}> = ({ type }) => {
+  const stroke = "#c8c8c8";
+  switch (type) {
+    case "cpu":
+      return (
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <rect x="8" y="8" width="20" height="20" rx="2" stroke={stroke} strokeWidth="2" />
+          <rect x="13" y="13" width="10" height="10" stroke={stroke} strokeWidth="1.6" />
+          <line x1="12" y1="3" x2="12" y2="8" stroke={stroke} strokeWidth="2" />
+          <line x1="18" y1="3" x2="18" y2="8" stroke={stroke} strokeWidth="2" />
+          <line x1="24" y1="3" x2="24" y2="8" stroke={stroke} strokeWidth="2" />
+          <line x1="12" y1="28" x2="12" y2="33" stroke={stroke} strokeWidth="2" />
+          <line x1="18" y1="28" x2="18" y2="33" stroke={stroke} strokeWidth="2" />
+          <line x1="24" y1="28" x2="24" y2="33" stroke={stroke} strokeWidth="2" />
+          <line x1="3" y1="12" x2="8" y2="12" stroke={stroke} strokeWidth="2" />
+          <line x1="3" y1="18" x2="8" y2="18" stroke={stroke} strokeWidth="2" />
+          <line x1="3" y1="24" x2="8" y2="24" stroke={stroke} strokeWidth="2" />
+          <line x1="28" y1="12" x2="33" y2="12" stroke={stroke} strokeWidth="2" />
+          <line x1="28" y1="18" x2="33" y2="18" stroke={stroke} strokeWidth="2" />
+          <line x1="28" y1="24" x2="33" y2="24" stroke={stroke} strokeWidth="2" />
+        </svg>
+      );
+    case "screen":
+      return (
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <rect x="9" y="4" width="18" height="28" rx="3" stroke={stroke} strokeWidth="2" />
+          <line x1="15" y1="8" x2="21" y2="8" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+          <line x1="14" y1="28" x2="22" y2="28" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    case "battery":
+      return (
+        <svg width="38" height="36" viewBox="0 0 38 36" fill="none">
+          <rect x="3" y="9" width="28" height="18" rx="3" stroke={stroke} strokeWidth="2" />
+          <path
+            d="M31 14H34C34.5523 14 35 14.4477 35 15V21C35 21.5523 34.5523 22 34 22H31"
+            stroke={stroke}
+            strokeWidth="2"
+          />
+          <path d="M18 13L14 18.5H18.5L16.5 23L21.5 17.2H17L18 13Z" fill={stroke} />
+        </svg>
+      );
+    case "camera":
+    case "body":
+      return (
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <path
+            d="M5 11C5 9.89543 5.89543 9 7 9H11L13.5 6H22.5L25 9H29C30.1046 9 31 9.89543 31 11V27C31 28.1046 30.1046 29 29 29H7C5.89543 29 5 28.1046 5 27V11Z"
+            stroke={stroke}
+            strokeWidth="2"
+          />
+          <circle cx="18" cy="19" r="5.5" stroke={stroke} strokeWidth="2" />
+        </svg>
+      );
+    case "price":
+      return (
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <path
+            d="M18.5 5H29C30.1046 5 31 5.89543 31 7V17.5L17.5 31C16.7 31.8 15.3 31.8 14.5 31L5 21.5C4.2 20.7 4.2 19.3 5 18.5L18.5 5Z"
+            stroke="#e5e5e5"
+            strokeWidth="2.2"
+          />
+          <circle cx="24.5" cy="11.5" r="2" fill="#e5e5e5" />
+        </svg>
+      );
+  }
+};
+
+// Right-side watermark illustrations inside each card
+const CardWatermark: React.FC<{
+  type: "cpu" | "screen" | "battery" | "camera" | "body" | "price";
+  frame: number;
+}> = ({ type, frame }) => {
+  const floatY = Math.sin(frame / 42) * 3;
+  switch (type) {
+    case "cpu":
+      return (
+        <svg
+          width="210"
+          height="210"
+          viewBox="0 0 210 210"
+          fill="none"
+          style={{
+            position: "absolute",
+            right: 18,
+            bottom: -12,
+            opacity: 0.22,
+            filter: "blur(1.4px)",
+            transform: `translateY(${floatY}px) rotate(12deg)`,
+          }}
+        >
+          <rect
+            x="45"
+            y="45"
+            width="120"
+            height="120"
+            rx="12"
+            fill="rgba(255,255,255,0.08)"
+            stroke="rgba(255,255,255,0.55)"
+            strokeWidth="4"
+          />
+          <rect
+            x="68"
+            y="68"
+            width="74"
+            height="74"
+            rx="6"
+            fill="rgba(0,0,0,0.35)"
+            stroke="rgba(255,255,255,0.4)"
+            strokeWidth="3"
+          />
+          {[62, 84, 105, 126, 148].map((pos) => (
+            <React.Fragment key={pos}>
+              <line x1={pos} y1="22" x2={pos} y2="45" stroke="rgba(255,255,255,0.5)" strokeWidth="5" strokeLinecap="round" />
+              <line x1={pos} y1="165" x2={pos} y2="188" stroke="rgba(255,255,255,0.5)" strokeWidth="5" strokeLinecap="round" />
+              <line x1="22" y1={pos} x2="45" y2={pos} stroke="rgba(255,255,255,0.5)" strokeWidth="5" strokeLinecap="round" />
+              <line x1="165" y1={pos} x2="188" y2={pos} stroke="rgba(255,255,255,0.5)" strokeWidth="5" strokeLinecap="round" />
+            </React.Fragment>
+          ))}
+        </svg>
+      );
+    case "screen":
+      return (
+        <svg
+          width="220"
+          height="220"
+          viewBox="0 0 220 220"
+          fill="none"
+          style={{
+            position: "absolute",
+            right: 8,
+            bottom: -18,
+            opacity: 0.2,
+            filter: "blur(1.2px)",
+            transform: `translateY(${floatY}px) rotate(-14deg)`,
+          }}
+        >
+          <rect
+            x="55"
+            y="18"
+            width="115"
+            height="190"
+            rx="18"
+            fill="rgba(255,255,255,0.06)"
+            stroke="rgba(255,255,255,0.55)"
+            strokeWidth="4.5"
+          />
+          <text
+            x="112"
+            y="95"
+            textAnchor="middle"
+            fill="rgba(255,255,255,0.45)"
+            fontSize="34"
+            fontWeight="900"
+          >
+            6.7
+          </text>
+          <line
+            x1="75"
+            y1="125"
+            x2="150"
+            y2="85"
+            stroke="rgba(255,255,255,0.35)"
+            strokeWidth="3"
+            strokeDasharray="6 6"
+          />
+        </svg>
+      );
+    case "battery":
+      return (
+        <svg
+          width="220"
+          height="210"
+          viewBox="0 0 220 210"
+          fill="none"
+          style={{
+            position: "absolute",
+            right: 14,
+            bottom: -12,
+            opacity: 0.2,
+            filter: "blur(1.4px)",
+            transform: `translateY(${floatY}px) rotate(-16deg)`,
+          }}
+        >
+          <rect
+            x="48"
+            y="45"
+            width="115"
+            height="140"
+            rx="16"
+            fill="rgba(255,255,255,0.08)"
+            stroke="rgba(255,255,255,0.52)"
+            strokeWidth="4.5"
+          />
+          <rect x="82" y="28" width="46" height="17" rx="5" fill="rgba(255,255,255,0.45)" />
+          <path d="M112 72L86 116H110L98 156L134 108H108L112 72Z" fill="rgba(255,255,255,0.48)" />
+        </svg>
+      );
+    case "camera":
+      return (
+        <svg
+          width="220"
+          height="220"
+          viewBox="0 0 220 220"
+          fill="none"
+          style={{
+            position: "absolute",
+            right: 10,
+            bottom: -24,
+            opacity: 0.2,
+            filter: "blur(1.2px)",
+            transform: `translateY(${floatY}px)`,
+          }}
+        >
+          <circle
+            cx="115"
+            cy="115"
+            r="78"
+            stroke="rgba(255,255,255,0.5)"
+            strokeWidth="5"
+            fill="rgba(255,255,255,0.04)"
+          />
+          <circle cx="115" cy="115" r="56" stroke="rgba(255,255,255,0.38)" strokeWidth="3.5" />
+          <circle
+            cx="115"
+            cy="115"
+            r="32"
+            stroke="rgba(255,255,255,0.45)"
+            strokeWidth="3"
+            fill="rgba(255,255,255,0.08)"
+          />
+          <line x1="75" y1="68" x2="108" y2="85" stroke="rgba(255,255,255,0.35)" strokeWidth="3" />
+          <line x1="158" y1="75" x2="140" y2="108" stroke="rgba(255,255,255,0.35)" strokeWidth="3" />
+          <line x1="155" y1="155" x2="122" y2="142" stroke="rgba(255,255,255,0.35)" strokeWidth="3" />
+          <line x1="72" y1="152" x2="90" y2="120" stroke="rgba(255,255,255,0.35)" strokeWidth="3" />
+        </svg>
+      );
+    case "body":
+      return (
+        <svg
+          width="210"
+          height="210"
+          viewBox="0 0 210 210"
+          fill="none"
+          style={{
+            position: "absolute",
+            right: 18,
+            bottom: -10,
+            opacity: 0.22,
+            filter: "blur(1px)",
+            transform: `translateY(${floatY}px) rotate(12deg)`,
+          }}
+        >
+          <line x1="48" y1="42" x2="48" y2="178" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" />
+          <line x1="40" y1="42" x2="56" y2="42" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" />
+          <line x1="40" y1="178" x2="56" y2="178" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" />
+          <line x1="68" y1="24" x2="154" y2="24" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" />
+          <line x1="68" y1="16" x2="68" y2="32" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" />
+          <line x1="154" y1="16" x2="154" y2="32" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" />
+          <rect
+            x="68"
+            y="42"
+            width="86"
+            height="136"
+            rx="14"
+            fill="rgba(255,255,255,0.07)"
+            stroke="rgba(255,255,255,0.55)"
+            strokeWidth="3.5"
+          />
+        </svg>
+      );
+    case "price":
+      return (
+        <svg
+          width="220"
+          height="210"
+          viewBox="0 0 220 210"
+          fill="none"
+          style={{
+            position: "absolute",
+            right: 16,
+            bottom: -6,
+            opacity: 0.25,
+            filter: "blur(1.4px)",
+            transform: `translateY(${floatY}px) rotate(-8deg)`,
+          }}
+        >
+          <rect
+            x="64"
+            y="36"
+            width="104"
+            height="122"
+            rx="10"
+            fill="rgba(255,255,255,0.1)"
+            stroke="rgba(255,255,255,0.45)"
+            strokeWidth="3"
+          />
+          <line x1="82" y1="68" x2="148" y2="68" stroke="rgba(255,255,255,0.4)" strokeWidth="4" strokeLinecap="round" />
+          <line x1="82" y1="92" x2="136" y2="92" stroke="rgba(255,255,255,0.35)" strokeWidth="4" strokeLinecap="round" />
+          <path d="M36 126L78 102L106 142L58 172L36 126Z" fill="rgba(255,255,255,0.38)" />
+        </svg>
+      );
+  }
+};
+
+// Realistic Dual Phone Render (Both angled right like the studio product photo, fading into dark floor)
+const DualPhonesRender: React.FC<{ frame: number }> = ({ frame }) => {
+  const floatOffset = Math.sin(frame / 45) * 3.5;
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: 560,
+        height: 615,
+        transform: `translateY(${floatOffset}px)`,
+        maskImage: "linear-gradient(180deg, #000 68%, rgba(0,0,0,0.45) 88%, transparent 99%)",
+        WebkitMaskImage:
+          "linear-gradient(180deg, #000 68%, rgba(0,0,0,0.45) 88%, transparent 99%)",
+      }}
+    >
+      {/* Left Phone: White/Silver Back View (angled right, showing right-side 3D thickness) */}
+      <div
+        style={{
+          position: "absolute",
+          left: 34,
+          top: 22,
+          width: 228,
+          height: 560,
+          borderRadius: 34,
+          transform: "perspective(1050px) rotateY(-24deg) rotateZ(-0.5deg)",
+          background:
+            "linear-gradient(155deg, #ffffff 0%, #f5f6f8 42%, #d5d7dc 75%, #9fa2a8 100%)",
+          border: "2px solid #e8eaee",
+          boxShadow:
+            "11px 6px 0 #c9ccd2, 14px 8px 0 #8c9098, 26px 32px 55px rgba(0,0,0,0.85)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Subtle halftone/grid texture on lower half of white phone */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage:
+              "linear-gradient(rgba(0,0,0,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.07) 1px, transparent 1px)",
+            backgroundSize: "5px 5px",
+            maskImage: "linear-gradient(180deg, transparent 28%, rgba(0,0,0,0.9) 100%)",
+            WebkitMaskImage:
+              "linear-gradient(180deg, transparent 28%, rgba(0,0,0,0.9) 100%)",
+          }}
+        />
+        {/* Metallic Edge Highlight */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 1,
+            borderRadius: 32,
+            border: "2px solid rgba(255,255,255,0.92)",
+            pointerEvents: "none",
+          }}
+        />
+        {/* Vertical Pill Camera Deco */}
+        <div
+          style={{
+            position: "absolute",
+            left: 20,
+            top: 38,
+            width: 54,
+            height: 192,
+            borderRadius: 28,
+            background: "linear-gradient(135deg, #e8e8e8 0%, #787878 48%, #d0d0d0 100%)",
+            padding: 5,
+            boxShadow: "4px 6px 14px rgba(0,0,0,0.38), inset 0 1px 2px #fff",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              borderRadius: 24,
+              background: "linear-gradient(180deg, #1a1a1a 0%, #080808 100%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "space-evenly",
+              padding: "6px 0",
+            }}
+          >
+            {[0, 1, 2].map((lensIdx) => (
+              <div
+                key={lensIdx}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background:
+                    "radial-gradient(circle at 38% 35%, #2b4558 0%, #0f171e 28%, #050505 58%, #292929 72%, #0a0a0a 100%)",
+                  border: "2.5px solid #3c3c3c",
+                  boxShadow: "inset 0 2px 5px rgba(255,255,255,0.22)",
+                  position: "relative",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 10,
+                    top: 9,
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "radial-gradient(circle, rgba(140,200,255,0.65), transparent 70%)",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Pill LED Flash next to camera island */}
+        <div
+          style={{
+            position: "absolute",
+            left: 84,
+            top: 60,
+            width: 10,
+            height: 26,
+            borderRadius: 8,
+            background: "linear-gradient(180deg, #fdf8e1 0%, #d8cfa8 100%)",
+            border: "1.5px solid #b8b296",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+          }}
+        />
+
+        {/* Subtle OnePlus-style center logo */}
+        <div
+          style={{
+            position: "absolute",
+            left: "53%",
+            top: 268,
+            transform: "translateX(-50%)",
+            width: 40,
+            height: 40,
+            border: "2px solid rgba(120,120,125,0.28)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "rgba(110,110,115,0.38)",
+            fontSize: 22,
+            fontWeight: 800,
+          }}
+        >
+          1<sup style={{ fontSize: 13, marginLeft: 1 }}>+</sup>
+        </div>
+      </div>
+
+      {/* Right Phone: Front Screen View (angled right, showing left metallic frame rail) */}
+      <div
+        style={{
+          position: "absolute",
+          left: 274,
+          top: 22,
+          width: 232,
+          height: 560,
+          borderRadius: 36,
+          transform: "perspective(1050px) rotateY(-24deg) rotateZ(-0.5deg)",
+          background: "#0a0a0a",
+          border: "3px solid #63666d",
+          boxShadow:
+            "-11px 4px 0 #484b52, -14px 6px 0 #26282c, 22px 30px 55px rgba(0,0,0,0.9)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Inner black screen bezel */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 5,
+            borderRadius: 30,
+            overflow: "hidden",
+            background: "linear-gradient(165deg, #2d2d2d 0%, #0a0a0a 42%, #171717 100%)",
+          }}
+        >
+          {/* Upper left sculpted 3D lobe with warm gold-white rim */}
+          <div
+            style={{
+              position: "absolute",
+              width: 310,
+              height: 310,
+              left: -125,
+              top: -25,
+              borderRadius: "50%",
+              background:
+                "radial-gradient(circle at 68% 68%, #67645e 0%, #2b2a28 45%, #0c0c0c 80%)",
+              borderRight: "3.5px solid rgba(242, 222, 165, 0.85)",
+              borderBottom: "3.5px solid rgba(242, 222, 165, 0.85)",
+              boxShadow: "8px 10px 26px rgba(235, 200, 115, 0.42)",
+              transform: "rotate(-12deg)",
+            }}
+          />
+
+          {/* Lower textured arch with glowing golden-white ribbon */}
+          <div
+            style={{
+              position: "absolute",
+              width: 350,
+              height: 430,
+              left: -18,
+              top: 192,
+              borderRadius: "47%",
+              background:
+                "radial-gradient(circle at 38% 14%, #a8a6a2 0%, #52504d 38%, #1a1a1a 82%)",
+              borderTop: "4px solid #fff3c4",
+              boxShadow:
+                "0 -8px 26px rgba(255, 226, 140, 0.65), inset 0 12px 28px rgba(255, 255, 255, 0.38)",
+              transform: "rotate(-20deg)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Fine square pattern on wallpaper lower arch */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundImage:
+                  "linear-gradient(rgba(0,0,0,0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.2) 1px, transparent 1px)",
+                backgroundSize: "5px 5px",
+              }}
+            />
+          </div>
+
+          {/* Punch-hole front camera */}
+          <div
+            style={{
+              position: "absolute",
+              top: 14,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 12,
+              height: 12,
+              borderRadius: "50%",
+              background: "#040404",
+              border: "1.5px solid #252525",
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface SpecCardProps {
+  index: number;
+  iconType: "cpu" | "screen" | "battery" | "camera" | "body" | "price";
+  label: string;
+  value: string;
+  lines: string[];
+  isPriceCard?: boolean;
+}
+
+const SpecCard: React.FC<SpecCardProps> = ({
+  index,
+  iconType,
+  label,
+  value,
+  lines,
+  isPriceCard,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  const startFrame = 14 + index * 7;
+  const enterProgress = spring({
+    frame: frame - startFrame,
+    fps,
+    config: { damping: 24, stiffness: 115, mass: 0.95 },
+  });
+
+  const sheenX = interpolate(frame, [startFrame + 6, startFrame + 75], [-90, 150], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const priceHighlightOpacity = isPriceCard
+    ? interpolate(frame, [78, 96], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      })
+    : 0;
+
+  const pulseGlow = isPriceCard ? 0.85 + Math.sin(frame / 10) * 0.15 : 0;
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        height: 256,
+        padding: "24px 30px",
+        boxSizing: "border-box",
+        background:
+          "linear-gradient(130deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.09) 100%)",
+        border: isPriceCard
+          ? "1px solid rgba(255,255,255,0.35)"
+          : "1px solid rgba(255,255,255,0.2)",
+        boxShadow: isPriceCard
+          ? `inset 0 1px 0 rgba(255,255,255,0.28), 0 14px 36px rgba(0,0,0,0.45), 0 0 ${
+              28 * priceHighlightOpacity
+            }px rgba(255,255,255,0.18)`
+          : "inset 0 1px 0 rgba(255,255,255,0.2), 0 14px 34px rgba(0,0,0,0.38)",
+        opacity: enterProgress,
+        transform: `translateY(${(1 - enterProgress) * 32}px) scale(${
+          0.97 + enterProgress * 0.03
+        })`,
+      }}
+    >
+      {/* Internal clipped layer for soft light falloff, sheen, and watermark */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          overflow: "hidden",
+          pointerEvents: "none",
+        }}
+      >
+        {/* Animated entrance light sweep */}
+        <div
+          style={{
+            position: "absolute",
+            inset: -80,
+            background:
+              "linear-gradient(118deg, transparent 36%, rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.03) 55%, transparent 64%)",
+            transform: `translateX(${sheenX}%)`,
+          }}
+        />
+
+        {/* Soft blurred diagonal light glow matching reference cards */}
+        <div
+          style={{
+            position: "absolute",
+            right: -40,
+            top: -50,
+            width: 280,
+            height: 340,
+            background:
+              "radial-gradient(ellipse at center, rgba(255,255,255,0.11) 0%, transparent 72%)",
+            filter: "blur(18px)",
+            transform: "rotate(-22deg)",
+          }}
+        />
+
+        {/* Right-side watermark illustration */}
+        <CardWatermark type={iconType} frame={frame} />
+      </div>
+
+      {/* Glowing white dashed border around the Reference Price card */}
+      {isPriceCard && (
+        <svg
+          width="100%"
+          height="100%"
+          style={{
+            position: "absolute",
+            inset: -2,
+            width: "calc(100% + 4px)",
+            height: "calc(100% + 4px)",
+            overflow: "visible",
+            pointerEvents: "none",
+            opacity: priceHighlightOpacity,
+          }}
+        >
+          <rect
+            x="2"
+            y="2"
+            width="calc(100% - 4px)"
+            height="calc(100% - 4px)"
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="4.5"
+            strokeDasharray="18 14"
+            strokeDashoffset={-frame * 0.8}
+            style={{
+              filter: `drop-shadow(0 0 ${10 * pulseGlow}px rgba(255,255,255,0.95)) drop-shadow(0 0 ${
+                22 * pulseGlow
+              }px rgba(255,255,255,0.55))`,
+            }}
+          />
+        </svg>
+      )}
+
+      {/* Header Row: Icon + Label + Horizontal Extending Line */}
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 18,
+          ...revealStyle(frame, startFrame + 4, 18, 12),
+        }}
+      >
+        <HeaderIcon type={iconType} />
+        <span
+          style={{
+            color: "#b8b8b8",
+            fontSize: 31,
+            fontWeight: 500,
+            letterSpacing: 0.5,
+          }}
+        >
+          {label}
+        </span>
+        <div
+          style={{
+            flex: 1,
+            height: 1,
+            marginLeft: 10,
+            background:
+              "linear-gradient(90deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 100%)",
+          }}
+        />
+      </div>
+
+      {/* Main Spec Value */}
+      <div
+        style={{
+          position: "relative",
+          color: "#f5f5f5",
+          fontSize: isPriceCard ? 66 : 49,
+          fontWeight: 900,
+          lineHeight: 1.16,
+          letterSpacing: isPriceCard ? 0.5 : 0,
+          marginBottom: isPriceCard ? 10 : 8,
+          textShadow: "0 2px 10px rgba(0,0,0,0.35)",
+          ...revealStyle(frame, startFrame + 9, 20, 16),
+        }}
+      >
+        {value}
+      </div>
+
+      {/* Sub-details */}
+      {lines.map((line, lineIdx) => (
+        <div
+          key={line}
+          style={{
+            position: "relative",
+            color: isPriceCard ? "#adadad" : "#9c9c9c",
+            fontSize: isPriceCard ? 28 : 22,
+            fontWeight: 500,
+            lineHeight: 1.48,
+            ...revealStyle(frame, startFrame + 14 + lineIdx * 4, 18, 10),
+          }}
+        >
+          {line}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export const PhoneSpecBoard: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const [handle] = useState(() => delayRender("Load Alibaba PuHuiTi fonts"));
+
+  useEffect(() => {
+    ensureFontsLoaded()
+      .then(() => continueRender(handle))
+      .catch((err) => cancelRender(err));
+  }, [handle]);
+
+  const leftEnter = spring({
+    frame,
+    fps,
+    config: { damping: 24, stiffness: 95, mass: 1.05 },
+  });
+
+  const animatedPrice = Math.round(
+    interpolate(frame, [52, 92], [0, phoneSpec.price], {
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    })
+  );
+
+  const subtitleProgress = interpolate(frame, [95, 118], [0, 1], {
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  return (
+    <AbsoluteFill
+      style={{
+        backgroundColor: "#0e0e0e",
+        color: "#ffffff",
+        fontFamily: "'Alibaba PuHuiTi', 'Microsoft YaHei', sans-serif",
+        overflow: "hidden",
+      }}
+    >
+      {/* Studio Gray Radial Lighting */}
+      <AbsoluteFill
+        style={{
+          background:
+            "radial-gradient(ellipse 78% 72% at 52% 42%, #2c2c2c 0%, #171717 55%, #080808 100%)",
+        }}
+      />
+
+      {/* Fine Square Grid Pattern across the entire canvas */}
+      <AbsoluteFill
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
+          backgroundSize: "11px 11px",
+          maskImage:
+            "radial-gradient(ellipse 90% 85% at 50% 48%, rgba(0,0,0,0.95) 20%, rgba(0,0,0,0.25) 100%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 90% 85% at 50% 48%, rgba(0,0,0,0.95) 20%, rgba(0,0,0,0.25) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Dark Sweeping Curve from Left-Middle to Bottom-Right */}
+      <svg
+        width="1920"
+        height="1080"
+        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+      >
+        <defs>
+          <linearGradient id="floorCurveFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(0,0,0,0.55)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0.92)" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M -40 390 Q 340 650 860 910 L 1960 1080 L -40 1080 Z"
+          fill="url(#floorCurveFill)"
+        />
+        <path
+          d="M -40 390 Q 340 650 860 910"
+          fill="none"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth="1.5"
+        />
+      </svg>
+
+      {/* Top-Left Watermark Shield Icon */}
+      <div style={{ position: "absolute", left: 22, top: 20, opacity: 0.85 }}>
+        <TopLeftLogo />
+      </div>
+
+      {/* LEFT COLUMN: Tier Box + Glowing Title + Dual Phones */}
+      <div
+        style={{
+          position: "absolute",
+          left: 66,
+          top: 52,
+          width: 566,
+          opacity: leftEnter,
+          transform: `translateX(${(1 - leftEnter) * -36}px)`,
+        }}
+      >
+        {/* Top Price Tier Box */}
+        <div
+          style={{
+            position: "relative",
+            height: 174,
+            padding: "24px 30px",
+            boxSizing: "border-box",
+            background:
+              "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)",
+            border: "1px solid rgba(255,255,255,0.22)",
+            boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "stretch",
+            gap: 16,
+          }}
+        >
+          {/* Left vertical accent bar spanning full content height */}
+          <div
+            style={{
+              width: 8,
+              marginTop: 12,
+              marginBottom: 8,
+              background: "linear-gradient(180deg, #6e6e6e 0%, #999999 100%)",
+              ...revealStyle(frame, 4, 18, 10),
+            }}
+          />
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              paddingTop: 2,
+              paddingBottom: 4,
+            }}
+          >
+            <div
+              style={{
+                color: "#9a9a9a",
+                fontSize: 23,
+                fontWeight: 500,
+                letterSpacing: 1,
+                ...revealStyle(frame, 4, 18, 10),
+              }}
+            >
+              {phoneSpec.tierLabel}
+            </div>
+
+            <div
+              style={{
+                color: "#d8d8d8",
+                fontSize: 48,
+                fontWeight: 900,
+                letterSpacing: 1,
+                lineHeight: 1.1,
+                ...revealStyle(frame, 8, 22, 14),
+              }}
+            >
+              {phoneSpec.tierValue}
+            </div>
+          </div>
+        </div>
+
+        {/* Glowing Phone Model Name */}
+        <div
+          style={{
+            marginTop: 22,
+            marginLeft: 18,
+            fontSize: 72,
+            fontWeight: 900,
+            color: "#ffffff",
+            letterSpacing: 1.5,
+            textShadow:
+              "0 0 18px rgba(255,255,255,0.85), 0 0 38px rgba(255,255,255,0.45), 0 4px 12px rgba(0,0,0,0.6)",
+            ...revealStyle(frame, 14, 24, 18),
+          }}
+        >
+          {phoneSpec.name}
+        </div>
+
+        {/* Dual 3D-Styled Phone Mockups */}
+        <div style={{ marginTop: 8 }}>
+          <DualPhonesRender frame={frame} />
+        </div>
+      </div>
+
+      {/* VERTICAL DIVIDER LINE */}
+      <div
+        style={{
+          position: "absolute",
+          left: 682,
+          top: 48,
+          width: 1.5,
+          height: 836,
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.32) 15%, rgba(255,255,255,0.28) 85%, rgba(255,255,255,0.08) 100%)",
+        }}
+      />
+
+      {/* RIGHT COLUMN: 2x3 Grid of Spec Cards */}
+      <div
+        style={{
+          position: "absolute",
+          left: 718,
+          right: 68,
+          top: 48,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          columnGap: 28,
+          rowGap: 32,
+        }}
+      >
+        <SpecCard
+          index={0}
+          iconType="cpu"
+          label="处理器"
+          value="天玑 7360 SUPER"
+          lines={["制程工艺：台积电 4nm"]}
+        />
+        <SpecCard
+          index={1}
+          iconType="screen"
+          label="屏幕"
+          value="6.72 英寸"
+          lines={["分辨率：2400×1080 / 屏幕材料：LCD 屏", "屏幕刷新率：144Hz"]}
+        />
+        <SpecCard
+          index={2}
+          iconType="battery"
+          label="电池与充电"
+          value="7000mAh"
+          lines={["有线充电：45 W", "无线充电：/"]}
+        />
+        <SpecCard
+          index={3}
+          iconType="camera"
+          label="影像"
+          value="主摄：50MP广角"
+          lines={["长焦：/  超广角：/", "其它：2MP黑白镜头"]}
+        />
+        <SpecCard
+          index={4}
+          iconType="body"
+          label="机身"
+          value="约208g"
+          lines={["长宽厚：165.85mm*76.00mm*8.55mm", "特色配置：NFC"]}
+        />
+        <SpecCard
+          index={5}
+          iconType="price"
+          label="参考价格"
+          value={`${animatedPrice}元`}
+          lines={["储存版本：6+128GB"]}
+          isPriceCard
+        />
+      </div>
+
+      {/* BOTTOM CENTER SUBTITLE */}
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: 48,
+          transform: `translateX(-50%) translateY(${(1 - subtitleProgress) * 14}px)`,
+          opacity: subtitleProgress,
+          fontSize: 45,
+          fontWeight: 700,
+          color: "#ffffff",
+          letterSpacing: 1,
+          textShadow:
+            "0 2px 6px rgba(0,0,0,0.95), 0 0 14px rgba(0,0,0,0.8)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {phoneSpec.subtitle}
+      </div>
+
+      {/* BOTTOM RIGHT FOOTNOTE */}
+      <div
+        style={{
+          position: "absolute",
+          right: 26,
+          bottom: 44,
+          color: "#b0b0b0",
+          fontSize: 19,
+          fontWeight: 500,
+          letterSpacing: 0.5,
+          opacity: subtitleProgress,
+        }}
+      >
+        {phoneSpec.footnote}
+      </div>
+    </AbsoluteFill>
+  );
+};
