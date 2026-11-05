@@ -56,10 +56,41 @@ import {
   RedCapComparisonShowcase,
   defaultRedCapShowcaseProps,
 } from "../effects/hardware-tri-pillars";
+import {
+  TechGridTitle,
+  TECH_GRID_TITLE_DURATION,
+  defaultTechGridTitleProps,
+} from "../effects/tech-grid-title";
 
 export const Root: React.FC = () => {
   return (
     <>
+      <Folder name="TechGridTitle">
+        {/* 科技取景器网格逐字下砸标题卡片模板 (60 FPS 电影级丝滑，透明通道) */}
+        <Composition
+          id="TechGridTitle"
+          component={TechGridTitle}
+          durationInFrames={TECH_GRID_TITLE_DURATION}
+          fps={60}
+          width={1920}
+          height={1080}
+          defaultProps={defaultTechGridTitleProps}
+        />
+        {/* 实景机模对比演示版 */}
+        <Composition
+          id="TechGridTitlePreview"
+          component={TechGridTitle}
+          durationInFrames={TECH_GRID_TITLE_DURATION}
+          fps={60}
+          width={1920}
+          height={1080}
+          defaultProps={{
+            ...defaultTechGridTitleProps,
+            previewFootageBackground: true,
+          }}
+        />
+      </Folder>
+
       <Folder name="Captions">
         {/* 机甲斜切风口播文字卡片（透明背景，可叠加口播视频，4s @ 30fps） */}
         <Composition
