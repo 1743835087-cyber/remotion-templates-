@@ -1,5 +1,6 @@
 import React from "react";
 import { Composition, Folder } from "remotion";
+import { 从夯到拉, TIER_INTRO_DURATION, TIER_INTRO_FPS } from "../effects/从夯到拉";
 import {
   KineticEditorialDark,
   KineticEditorialLight,
@@ -234,6 +235,14 @@ export const Root: React.FC = () => {
       </Folder>
 
       <Folder name="Effects">
+        <Composition
+          id="CongHangDaoLa"
+          component={从夯到拉}
+          durationInFrames={TIER_INTRO_DURATION}
+          fps={TIER_INTRO_FPS}
+          width={1920}
+          height={1080}
+        />
         {/* 极力猫 5G RedCap 随身WiFi：左设备右三层对比卡片模板 (满血5G vs RedCap轻量化5G vs 传统4G, 1080P, 8s @ 30fps) */}
         <Composition
           id="RedCapShowcase"
